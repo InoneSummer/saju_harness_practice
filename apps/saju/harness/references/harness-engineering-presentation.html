@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사주 서비스를 하네스 엔지니어링으로 만들자</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f3efe7;
+      --paper-2: #fbfaf7;
+      --ink: #171717;
+      --muted: #6b655d;
+      --line: #d8d0c3;
+      --accent: #d9272e;
+      --accent-soft: rgba(217, 39, 46, 0.12);
+      --shadow: rgba(23, 23, 23, 0.08);
+      --mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+      --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      --display: "Space Grotesk", "IBM Plex Sans KR", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(217, 39, 46, 0.08), transparent 24%),
+        linear-gradient(180deg, #f7f3ec 0%, var(--paper) 100%);
+      color: var(--ink);
+      font-family: var(--sans);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35)),
+        repeating-linear-gradient(
+          0deg,
+          rgba(23, 23, 23, 0.014) 0,
+          rgba(23, 23, 23, 0.014) 1px,
+          transparent 1px,
+          transparent 5px
+        );
+      mix-blend-mode: multiply;
+      opacity: 0.6;
+    }
+
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 5px;
+      width: 100%;
+      background: rgba(23, 23, 23, 0.06);
+      z-index: 20;
+    }
+
+    .progress__bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), #ff7d5c);
+      transition: width 220ms ease;
+    }
+
+    .hud {
+      position: fixed;
+      left: 28px;
+      right: 28px;
+      bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      z-index: 20;
+      pointer-events: none;
+      color: var(--muted);
+      font: 500 12px/1.4 var(--mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hud__pill {
+      padding: 10px 14px;
+      border: 1px solid rgba(23, 23, 23, 0.1);
+      border-radius: 999px;
+      background: rgba(251, 250, 247, 0.86);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .deck {
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      transition: transform 320ms ease;
+    }
+
+    .slide {
+      position: relative;
+      flex: 0 0 100vw;
+      height: 100vh;
+      padding: clamp(40px, 5vw, 72px);
+      display: grid;
+      grid-template-columns: minmax(160px, 18vw) 1fr;
+      gap: clamp(22px, 3vw, 40px);
+      align-items: stretch;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      top: 36px;
+      bottom: 36px;
+      left: clamp(40px, 5vw, 72px);
+      width: 8px;
+      background: linear-gradient(180deg, var(--accent), rgba(217, 39, 46, 0.18));
+      border-radius: 999px;
+    }
+
+    .slide__meta {
+      padding-left: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .slide__num {
+      font: 700 clamp(46px, 7vw, 92px)/0.9 var(--display);
+      letter-spacing: -0.04em;
+    }
+
+    .slide__tag,
+    .slide__footer {
+      color: var(--muted);
+      font: 500 13px/1.4 var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .slide__body {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: clamp(18px, 2vw, 28px);
+      padding: clamp(18px, 2vw, 26px) 0;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font: 500 14px/1.4 var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 48px;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-family: var(--display);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+    }
+
+    h1 {
+      font-size: clamp(60px, 10vw, 132px);
+      max-width: 10ch;
+    }
+
+    h2 {
+      font-size: clamp(38px, 5.6vw, 76px);
+      max-width: 13ch;
+    }
+
+    .subtitle {
+      max-width: 42rem;
+      font-size: clamp(20px, 2vw, 30px);
+      line-height: 1.5;
+      color: #39342f;
+    }
+
+    .lede {
+      max-width: 54rem;
+      font-size: clamp(20px, 2.1vw, 32px);
+      line-height: 1.45;
+      color: #292521;
+    }
+
+    .lede strong,
+    .metric strong,
+    .accent {
+      color: var(--accent);
+    }
+
+    .bullets {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 16px;
+      max-width: 56rem;
+    }
+
+    .bullets li {
+      position: relative;
+      padding-left: 28px;
+      font-size: clamp(20px, 1.8vw, 30px);
+      line-height: 1.42;
+    }
+
+    .bullets li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.68em;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px var(--accent-soft);
+      transform: translateY(-50%);
+    }
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card,
+    .metric,
+    .panel,
+    .quote,
+    .process-step {
+      border: 1px solid var(--line);
+      background: rgba(251, 250, 247, 0.92);
+      box-shadow: 0 24px 60px var(--shadow);
+    }
+
+    .card,
+    .metric,
+    .process-step {
+      padding: 22px;
+      border-radius: 24px;
+    }
+
+    .card h3,
+    .metric h3,
+    .process-step h3 {
+      margin: 0 0 12px;
+      font: 700 clamp(18px, 1.8vw, 28px)/1.1 var(--display);
+      letter-spacing: -0.04em;
+    }
+
+    .card p,
+    .metric p,
+    .process-step p,
+    .panel p {
+      margin: 0;
+      font-size: clamp(16px, 1.2vw, 20px);
+      line-height: 1.55;
+      color: #403a35;
+    }
+
+    .metric {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 220px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 8px;
+      font: 700 clamp(18px, 2vw, 26px)/1 var(--mono);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .panel {
+      padding: 26px;
+      border-radius: 28px;
+    }
+
+    .panel--split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .panel--split > div {
+      padding: 12px 6px;
+    }
+
+    .panel--split h3 {
+      margin: 0 0 12px;
+      font: 700 clamp(24px, 2vw, 34px)/1.05 var(--display);
+      letter-spacing: -0.04em;
+    }
+
+    .panel--split ul {
+      margin: 0;
+      padding-left: 20px;
+      display: grid;
+      gap: 10px;
+      font-size: clamp(18px, 1.4vw, 22px);
+      line-height: 1.45;
+    }
+
+    .quote {
+      padding: 28px 30px;
+      border-radius: 30px;
+      font-size: clamp(24px, 2.2vw, 36px);
+      line-height: 1.42;
+      color: #292521;
+    }
+
+    .quote small {
+      display: block;
+      margin-top: 18px;
+      font: 500 13px/1.5 var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .tree {
+      margin: 0;
+      padding: 24px 26px;
+      border-radius: 28px;
+      border: 1px solid var(--line);
+      background: #f8f5ef;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 24px 50px var(--shadow);
+      font: 500 clamp(14px, 1.2vw, 18px)/1.6 var(--mono);
+      overflow: auto;
+      white-space: pre;
+      color: #25211d;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .process-step {
+      position: relative;
+      min-height: 220px;
+    }
+
+    .process-step::after {
+      content: "";
+      position: absolute;
+      top: 34px;
+      right: -18px;
+      width: 36px;
+      height: 2px;
+      background: var(--accent);
+    }
+
+    .timeline .process-step:last-child::after {
+      display: none;
+    }
+
+    .process-step span {
+      display: inline-block;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font: 500 12px/1.4 var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .notes {
+      display: none;
+      position: absolute;
+      right: clamp(26px, 3vw, 42px);
+      bottom: 74px;
+      width: min(460px, 34vw);
+      padding: 20px 22px;
+      border-radius: 22px;
+      border: 1px solid rgba(23, 23, 23, 0.1);
+      background: rgba(20, 20, 20, 0.88);
+      color: #f7f5f0;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+      font-size: 14px;
+      line-height: 1.6;
+      z-index: 5;
+    }
+
+    body.show-notes .slide.active .notes {
+      display: block;
+    }
+
+    .notes::before {
+      content: "Speaker notes";
+      display: block;
+      margin-bottom: 10px;
+      color: #ffb4a5;
+      font: 500 11px/1.4 var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cover h1 {
+      max-width: 8ch;
+      font-size: clamp(52px, 7.2vw, 96px);
+    }
+
+    .cover .subtitle {
+      margin-top: 18px;
+      font-size: clamp(22px, 1.9vw, 30px);
+      max-width: 28rem;
+    }
+
+    .cover .hero-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .cover .hero-block {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background:
+        linear-gradient(135deg, rgba(217, 39, 46, 0.08), transparent 62%),
+        rgba(251, 250, 247, 0.88);
+      box-shadow: 0 28px 70px var(--shadow);
+    }
+
+    .cover .hero-kicker {
+      display: inline-block;
+      margin-bottom: 16px;
+      color: var(--accent);
+      font: 500 13px/1.4 var(--mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .cover .quote {
+      font-size: clamp(22px, 1.9vw, 30px);
+    }
+
+    .closing {
+      background:
+        radial-gradient(circle at right top, rgba(217, 39, 46, 0.13), transparent 30%),
+        linear-gradient(180deg, #f6f2eb 0%, #ede7dc 100%);
+    }
+
+    .closing .quote {
+      font-size: clamp(30px, 2.6vw, 44px);
+    }
+
+    @media (max-width: 1100px) {
+      .slide {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .slide::after {
+        top: 24px;
+        left: 24px;
+        right: 24px;
+        width: auto;
+        height: 6px;
+      }
+
+      .slide__meta {
+        padding: 24px 0 0 0;
+        gap: 8px;
+      }
+
+      .grid-4,
+      .grid-3,
+      .grid-2,
+      .timeline,
+      .panel--split,
+      .cover .hero-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .process-step::after {
+        display: none;
+      }
+
+      .notes {
+        width: calc(100vw - 48px);
+      }
+    }
+
+    @media print {
+      html,
+      body {
+        overflow: visible;
+        background: white;
+      }
+
+      body::before,
+      .progress,
+      .hud,
+      .notes {
+        display: none !important;
+      }
+
+      .deck {
+        display: block;
+        transform: none !important;
+      }
+
+      .slide {
+        page-break-after: always;
+        height: auto;
+        min-height: 100vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress"><div class="progress__bar" id="progress-bar"></div></div>
+  <main class="deck" id="deck">
+    <section class="slide cover active" data-title="Title">
+      <div class="slide__meta">
+        <div class="slide__num">01</div>
+        <div class="slide__tag">Harness Engineering Deck</div>
+        <div class="slide__footer">Ask Dori</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">Educational Build Story</div>
+        <div class="hero-grid">
+          <div>
+            <h1>사주 서비스를 하네스 엔지니어링으로 만들자</h1>
+            <p class="subtitle">프롬프트를 넘어서, AI와 일하는 환경을 설계하는 법</p>
+          </div>
+          <div class="hero-block">
+            <span class="hero-kicker">Today</span>
+            <p class="lede">개념부터 시작해서 <strong>repository harness</strong>, <strong>application harness</strong>, 그리고 실제 실행 루프까지 한 번에 본다.</p>
+          </div>
+        </div>
+        <div class="quote">“AI에게 일을 시키는 것”이 아니라 “AI가 잘 일하게 만드는 환경”을 설계하는 이야기다.<small>Opening thesis</small></div>
+        <aside class="notes">안녕하세요 에스크 도리의 도리입니다. 오늘은 하네스 엔지니어링이 무엇인지, 그리고 그걸 실제로 사주 서비스 제작에 어떻게 적용할 수 있는지 같이 보겠습니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Why This Talk">
+      <div class="slide__meta">
+        <div class="slide__num">02</div>
+        <div class="slide__tag">Why now</div>
+        <div class="slide__footer">Question to workflow</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">댓글에서 시작된 발표</div>
+        <h2>“하네스 엔지니어링은 어떻게 하나요?”</h2>
+        <div class="grid-3">
+          <article class="metric"><strong>Concept</strong><p>개념을 처음 듣는 사람도 이해할 수 있게 풀어 설명한다.</p></article>
+          <article class="metric"><strong>Structure</strong><p>문서, 저장소, 검증 기준이 어떻게 연결되는지 보여준다.</p></article>
+          <article class="metric"><strong>Practice</strong><p>사주 서비스 예시로 실제 적용 흐름까지 따라간다.</p></article>
+        </div>
+        <aside class="notes">하네스 엔지니어링이라는 말을 쓰는 분은 늘고 있는데, 막상 쉽게 설명하는 자료는 많지 않았습니다. 그래서 오늘은 개념 설명으로 끝내지 않고, 실제로 어떻게 착수하는지까지 같이 가보겠습니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Prompt vs Harness">
+      <div class="slide__meta">
+        <div class="slide__num">03</div>
+        <div class="slide__tag">Comparison</div>
+        <div class="slide__footer">Request vs environment</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">출발점 비교</div>
+        <h2>프롬프트 엔지니어링에서 하네스 엔지니어링으로</h2>
+        <section class="panel panel--split">
+          <div>
+            <h3>Prompt Engineering</h3>
+            <ul>
+              <li>그때그때 요청을 잘 쓰는 기술</li>
+              <li>모델에게 한 번의 작업을 부탁하는 방식</li>
+              <li>결과 품질이 매 요청에 크게 좌우된다</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Harness Engineering</h3>
+            <ul>
+              <li>AI가 잘 일하게 만드는 환경 설계</li>
+              <li>규칙, 구조, 검증, 루프를 미리 합의한다</li>
+              <li>반복 가능한 품질과 일관성을 노린다</li>
+            </ul>
+          </div>
+        </section>
+        <aside class="notes">우리는 보통 "이거 해줘"라고 자연어로 요청해왔고, 그걸 프롬프트 엔지니어링이라고 불렀습니다. 하네스 엔지니어링은 여기서 한 단계 더 가서, AI가 반복적으로 잘 일할 수 있도록 작업 환경 전체를 설계하는 접근입니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="AI as Teammate">
+      <div class="slide__meta">
+        <div class="slide__num">04</div>
+        <div class="slide__tag">Mental model</div>
+        <div class="slide__footer">New teammate</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">관점 전환</div>
+        <h2>AI를 도구가 아니라 새로 온 팀원으로 본다면?</h2>
+        <div class="quote">“우리 회사는 이렇게 일해. 이런 결과물을 원해. 이런 건 꼭 지켜. 이런 건 하지 마.”<small>팀 규칙을 먼저 공유하는 방식</small></div>
+        <ul class="bullets">
+          <li>팀 규칙을 알려주면 매번 처음부터 설명할 필요가 없다.</li>
+          <li>결과물 기준과 금지사항이 일관성을 만든다.</li>
+          <li>바쁜 팀장일수록 환경 설계가 효율을 만든다.</li>
+        </ul>
+        <aside class="notes">매번 처음부터 설명하기보다, 우리 팀은 이렇게 일한다는 규칙과 기준을 먼저 알려주는 편이 훨씬 일관된 결과를 만듭니다. 바쁜 팀장일수록 이 셋업이 중요합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="What Is It">
+      <div class="slide__meta">
+        <div class="slide__num">05</div>
+        <div class="slide__tag">Definition</div>
+        <div class="slide__footer">Operating model</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">핵심 정의</div>
+        <h2>하네스 엔지니어링은 업무 위임을 위한 운영 설계다</h2>
+        <p class="lede">LLM에게 일을 맡길 때 <strong>규칙</strong>, <strong>작업 구조</strong>, <strong>검증 방법</strong>, <strong>실행 흐름</strong>을 미리 묶어두는 것.</p>
+        <div class="grid-4">
+          <article class="card"><h3>Rules</h3><p>우리 팀의 방식과 금지사항</p></article>
+          <article class="card"><h3>Structure</h3><p>무엇을 어떤 단위로 만들지</p></article>
+          <article class="card"><h3>Validation</h3><p>무엇을 보고 성공으로 볼지</p></article>
+          <article class="card"><h3>Loop</h3><p>수정, 검증, 반복의 실행 방식</p></article>
+        </div>
+        <aside class="notes">하네스 엔지니어링은 LLM에게 일을 맡기기 위해, 규칙과 작업 구조, 검증 방식, 실행 루프를 미리 묶어두는 일입니다. 즉흥적으로 시키는 게 아니라, 일하는 체계를 만드는 것입니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Four Components">
+      <div class="slide__meta">
+        <div class="slide__num">06</div>
+        <div class="slide__tag">Core components</div>
+        <div class="slide__footer">4-part system</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">구성 요소</div>
+        <h2>하네스 엔지니어링의 네 가지 축</h2>
+        <div class="grid-2">
+          <article class="metric"><strong>Constitution</strong><p>“우리 팀은 이렇게 일한다”를 담는 규칙 문서</p></article>
+          <article class="metric"><strong>Task Structure</strong><p>무엇을 어떤 순서와 단위로 만들지 정의하는 지시서</p></article>
+          <article class="metric"><strong>Validation</strong><p>결과가 맞는지 판단하는 기준과 실제 확인 방식</p></article>
+          <article class="metric"><strong>Agent Loop</strong><p>수정하고, 검증하고, 다시 고치는 반복 루프</p></article>
+        </div>
+        <aside class="notes">헌법은 "우리 팀은 이렇게 일한다"는 규칙이고, 작업 구조는 무엇을 어떻게 만들지 정하는 지시서입니다. 검증은 결과가 맞는지 확인하는 기준이고, 실행 루프는 수정-검증-반복의 흐름입니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Need More Than Docs">
+      <div class="slide__meta">
+        <div class="slide__num">07</div>
+        <div class="slide__tag">Reality check</div>
+        <div class="slide__footer">Docs are not enough</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">실전에서 빠지기 쉬운 것</div>
+        <h2>문서만 있다고 AI가 잘 일하는 건 아니다</h2>
+        <ul class="bullets">
+          <li><span class="accent">Repository</span>가 있어야 어디에서 일할지 정해진다.</li>
+          <li><span class="accent">Reference</span>가 있어야 복잡한 판단을 보조할 수 있다.</li>
+          <li><span class="accent">Rollback</span>이 있어야 자율적으로 움직이다가도 안전하게 돌아온다.</li>
+        </ul>
+        <div class="quote">규칙 + 구조 + 검증 + 루프 + 저장소 + 참고 자료 + 복구 장치까지 있어야 오른팔처럼 일한다.<small>Operational completeness</small></div>
+        <aside class="notes">규칙과 작업 구조만으로는 부족합니다. 실제로 작업할 repository와 참고 자료, 그리고 실패했을 때 되돌릴 장치까지 있어야 AI가 자율적으로 움직일 수 있습니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Two Levels">
+      <div class="slide__meta">
+        <div class="slide__num">08</div>
+        <div class="slide__tag">Two levels</div>
+        <div class="slide__footer">Repository and app</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">큰 그림</div>
+        <h2>하네스는 두 단계로 나뉜다</h2>
+        <div class="grid-2">
+          <article class="panel">
+            <h3>Repository Harness</h3>
+            <p>이 저장소 전체에서 어떻게 일할지 정한다. 문서 위치, 공통 규칙, 역할, 린트/테스트/CI 관점, handoff 흐름이 여기에 들어간다.</p>
+          </article>
+          <article class="panel">
+            <h3>Application Harness</h3>
+            <p>특정 앱이 어떤 기능과 사용자 경험을 가져야 하는지 정의한다. 도메인 규칙, 명세, 피드백 구조, 앱 전용 에이전트 루프가 여기에 들어간다.</p>
+          </article>
+        </div>
+        <aside class="notes">하네스 엔지니어링은 크게 두 단계로 나눌 수 있습니다. 저장소 전체에 적용되는 공통 규칙이 있고, 각 앱이나 서비스에 맞는 세부 규칙이 있습니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Start From App">
+      <div class="slide__meta">
+        <div class="slide__num">09</div>
+        <div class="slide__tag">Teaching choice</div>
+        <div class="slide__footer">Inductive route</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">왜 이 순서인가</div>
+        <h2>개발자는 repository부터, 일반 사용자는 app부터 떠올린다</h2>
+        <section class="panel panel--split">
+          <div>
+            <h3>개발자에게 익숙한 방식</h3>
+            <ul>
+              <li>작업 환경부터 세팅</li>
+              <li>공통 규칙부터 먼저 설계</li>
+              <li>그 다음 앱을 구현</li>
+            </ul>
+          </div>
+          <div>
+            <h3>이번 강의의 방식</h3>
+            <ul>
+              <li>만들고 싶은 앱을 먼저 잡는다</li>
+              <li>앱 하네스를 먼저 명확히 한다</li>
+              <li>그 후 repository 하네스로 확장한다</li>
+            </ul>
+          </div>
+        </section>
+        <aside class="notes">개발자는 작업 환경부터 세팅하는 데 익숙하지만, 일반 사용자는 보통 만들고 싶은 앱이 먼저 떠오릅니다. 그래서 오늘은 애플리케이션 하네스를 먼저 생각하고, 이후 repository 하네스로 확장하는 흐름을 택합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Saju Demo">
+      <div class="slide__meta">
+        <div class="slide__num">10</div>
+        <div class="slide__tag">Demo target</div>
+        <div class="slide__footer">Educational service</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">실습 대상</div>
+        <h2>최근에 재미있게 본 사주 서비스를 교육용 예제로 삼는다</h2>
+        <div class="grid-3">
+          <article class="card"><h3>입력</h3><p>생년월일시를 입력한다.</p></article>
+          <article class="card"><h3>계산</h3><p>아주 단순한 규칙 기반으로 사주 구조를 계산한다.</p></article>
+          <article class="card"><h3>출력</h3><p>교육용 수준의 기본 분석 결과를 보여준다.</p></article>
+        </div>
+        <p class="lede">이번 강의에서는 <strong>LLM API 호출 없이도</strong> 기초적인 수준의 사주 서비스 구조를 만들 수 있다는 점에 집중한다.</p>
+        <aside class="notes">최근에 지인이 사주 서비스를 만든 걸 보고 재미있게 봤고, 교육용 예제로도 적합하다고 느꼈습니다. 이번 예시는 아주 단순한 규칙 기반으로, 해석 엔진의 기본 구조만 보여주는 방향입니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Starting Point">
+      <div class="slide__meta">
+        <div class="slide__num">11</div>
+        <div class="slide__tag">Bootstrap</div>
+        <div class="slide__footer">Use a standard skeleton</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">처음 시작할 때</div>
+        <h2>표준적인 하네스 구조를 가져와서 내 목적에 맞게 조정한다</h2>
+        <ul class="bullets">
+          <li>공개된 하네스 엔지니어링 아티클 구조를 참고한다.</li>
+          <li>필요한 폴더와 문서 이름을 먼저 잡는다.</li>
+          <li>AI와 협의하면서 문서 내용을 채워 넣는다.</li>
+        </ul>
+        <div class="quote">처음부터 혼자 발명할 필요는 없다. 좋은 기본 골격을 복사하고, 목적에 맞게 수정하면 된다.<small>Bootstrap principle</small></div>
+        <aside class="notes">처음부터 모든 구조를 혼자 발명할 필요는 없습니다. 표준적인 구조를 가져와서 내 작업 방식과 목적에 맞게 수정하면 됩니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Repository Structure">
+      <div class="slide__meta">
+        <div class="slide__num">12</div>
+        <div class="slide__tag">Folder plan</div>
+        <div class="slide__footer">Repository skeleton</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">예시 구조</div>
+        <h2>repository-level harness와 app-level harness를 분리한다</h2>
+        <pre class="tree">/Desktop/h
+├── harness/
+│   ├── core/
+│   │   ├── docs/
+│   │   ├── roles/
+│   │   ├── workflows/
+│   │   ├── platforms/
+│   │   ├── templates/
+│   │   └── schemas/
+│   └── scripts/
+└── apps/
+    └── saju/
+        ├── harness/
+        │   ├── docs/
+        │   ├── references/
+        │   ├── specs/
+        │   └── plans/
+        ├── src/
+        └── tests/</pre>
+        <aside class="notes">repository 레벨에는 공통 규칙을 두고, app 레벨에는 사주 서비스에 맞는 문서를 둡니다. 그리고 코드와 테스트는 별도 폴더로 분리해서 실행 가능한 구조를 만듭니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Constitution">
+      <div class="slide__meta">
+        <div class="slide__num">13</div>
+        <div class="slide__tag">Human judgment</div>
+        <div class="slide__footer">Most important document</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">사람이 제일 많이 개입할 지점</div>
+        <h2>헌법은 AI 협업의 방향을 고정하는 문서다</h2>
+        <div class="grid-3">
+          <article class="metric"><strong>Purpose</strong><p>왜 이 저장소를 만드는지 분명하게 적는다.</p></article>
+          <article class="metric"><strong>Values</strong><p>무엇을 중요하게 보고 무엇을 금지하는지 정한다.</p></article>
+          <article class="metric"><strong>Done</strong><p>무엇이 끝난 상태인지 미리 합의한다.</p></article>
+        </div>
+        <aside class="notes">AI가 협업할 때 가장 중요한 건 헌법입니다. 교육용이라면 간결해야 하고, 안전해야 하고, 초보자가 이해할 수 있어야 합니다. 이 가치 판단은 결국 사람이 잡아줘야 합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Sample Constitution">
+      <div class="slide__meta">
+        <div class="slide__num">14</div>
+        <div class="slide__tag">Example</div>
+        <div class="slide__footer">Clear non-negotiables</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">예시 원칙</div>
+        <h2>이 저장소의 헌법이 말해주는 것</h2>
+        <div class="grid-2">
+          <article class="card"><h3>간결성</h3><p>복잡하면 쪼개고, 불필요하면 제거한다.</p></article>
+          <article class="card"><h3>검증 가능성</h3><p>문서, 코드, 테스트가 같은 결과를 확인해야 한다.</p></article>
+          <article class="card"><h3>안전성</h3><p>개인정보와 입력 데이터는 기본적으로 보호 대상이다.</p></article>
+          <article class="card"><h3>비가역 금지</h3><p>문서 없이 기능 추가 금지, 개인정보 로그 저장 금지.</p></article>
+        </div>
+        <aside class="notes">예를 들어 저의 저장소 헌법은 간결성, 검증 가능성, 안전성을 핵심 가치로 두고 있습니다. 이런 원칙이 있어야 이후 문서와 코드, 테스트 판단이 흔들리지 않습니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Ambiguity Review">
+      <div class="slide__meta">
+        <div class="slide__num">15</div>
+        <div class="slide__tag">Tighten the rules</div>
+        <div class="slide__footer">Remove vagueness</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">문서 다듬기</div>
+        <h2>AI와 협업할수록 모호한 표현을 줄여야 한다</h2>
+        <section class="panel panel--split">
+          <div>
+            <h3>Before</h3>
+            <ul>
+              <li>“한두 번 수정 후”</li>
+              <li>“적당히 검토”</li>
+              <li>“필요하면 롤백”</li>
+            </ul>
+          </div>
+          <div>
+            <h3>After</h3>
+            <ul>
+              <li>“최대 5회까지 자율 수정 시도 후 기록”</li>
+              <li>“handoff 조건을 문서로 남긴다”</li>
+              <li>“rollback trigger를 숫자 기준으로 정의”</li>
+            </ul>
+          </div>
+        </section>
+        <aside class="notes">문서를 AI와 같이 쓰다 보면 그럴듯하지만 애매한 표현이 많이 들어갑니다. 예를 들어 "한두 번 수정 후" 같은 표현은 기준이 너무 약합니다. 이런 지점은 사람이 보고 더 명확하게 바꾸는 게 중요합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Cleanup and Rollback">
+      <div class="slide__meta">
+        <div class="slide__num">16</div>
+        <div class="slide__tag">Safety layer</div>
+        <div class="slide__footer">Autonomy needs recovery</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">안전장치</div>
+        <h2>AI의 자율성이 커질수록 cleanup과 rollback도 강해져야 한다</h2>
+        <div class="grid-2">
+          <article class="panel">
+            <h3>빠른 로컬 cleanup</h3>
+            <p>temp file 정리, debug code 제거, 프로세스 종료, snapshot 저장 같은 국소 복구를 담당한다.</p>
+          </article>
+          <article class="panel">
+            <h3>강한 git rollback</h3>
+            <p>branch, checkpoint commit, restore를 통해 작업 단위 전체를 되돌릴 수 있게 만든다.</p>
+          </article>
+        </div>
+        <aside class="notes">AI에게 자율성을 줄수록 잘못된 수정에서 빠르게 되돌릴 수 있는 안전장치가 필요합니다. 로컬 cleanup과 git rollback을 2층 구조로 두면 훨씬 안전합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Why Git">
+      <div class="slide__meta">
+        <div class="slide__num">17</div>
+        <div class="slide__tag">Rollback layer</div>
+        <div class="slide__footer">Checkpoint thinking</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">왜 git이 필요한가</div>
+        <h2>파일 단위 복구만으로는 작업 전체를 지킬 수 없다</h2>
+        <ul class="bullets">
+          <li>cleanup snapshot은 일부 파일 복구에는 좋지만 범위가 좁다.</li>
+          <li>git은 <span class="accent">작업 상태 전체</span>를 기준으로 복구할 수 있다.</li>
+          <li>AI가 자율적으로 수정할수록 checkpoint가 더 중요해진다.</li>
+        </ul>
+        <div class="quote">snapshot rollback = 국소 복구 / git rollback = 작업 단위 복구<small>Two-layer recovery model</small></div>
+        <aside class="notes">cleanup snapshot은 일부 파일 복구에는 좋지만, 작업 전체를 되돌리기에는 한계가 있습니다. 그래서 git branch, checkpoint commit, restore 같은 기능이 꼭 필요합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Execution Loop">
+      <div class="slide__meta">
+        <div class="slide__num">18</div>
+        <div class="slide__tag">Execution</div>
+        <div class="slide__footer">Docs to code</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">실행 루프</div>
+        <h2>문서만 만드는 게 아니라 계속 돌려야 한다</h2>
+        <div class="timeline">
+          <article class="process-step"><span>Step 1</span><h3>문서 작성</h3><p>헌법, 명세, 계획, 참고 자료를 만든다.</p></article>
+          <article class="process-step"><span>Step 2</span><h3>코드 구현</h3><p>문서 기준으로 가장 단순한 구현을 만든다.</p></article>
+          <article class="process-step"><span>Step 3</span><h3>테스트</h3><p>문서 기준으로 실제 동작을 검증한다.</p></article>
+          <article class="process-step"><span>Step 4</span><h3>리뷰</h3><p>보안, 안정성, 구조를 다시 본다.</p></article>
+          <article class="process-step"><span>Step 5</span><h3>반복</h3><p>수정하고 재검증하며 기준 통과까지 간다.</p></article>
+        </div>
+        <aside class="notes">하네스 엔지니어링은 문서를 만드는 것으로 끝나지 않습니다. 문서대로 구현하고, 실제로 실행해 보고, 테스트를 추가하고, 다시 고치는 루프를 돌려야 진짜로 살아 있는 시스템이 됩니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Human In The Loop">
+      <div class="slide__meta">
+        <div class="slide__num">19</div>
+        <div class="slide__tag">Leadership</div>
+        <div class="slide__footer">Not neglect, not micromanage</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">중요한 태도</div>
+        <h2>방임도 아니고, 일일이 지시도 아닌 합의 기반 위임</h2>
+        <div class="grid-3">
+          <article class="metric"><strong>Goal</strong><p>수요자인 내가 원하는 결과의 상을 먼저 명확히 가진다.</p></article>
+          <article class="metric"><strong>Agreement</strong><p>AI와 지식을 나누며 목표와 기준을 함께 구체화한다.</p></article>
+          <article class="metric"><strong>Review</strong><p>AI가 만든 결과는 사람이 읽고 승인하면서 다듬는다.</p></article>
+        </div>
+        <aside class="notes">AI가 만든 결과를 그냥 믿고 넘기면 안 됩니다. 하지만 모든 걸 하나하나 지시하는 것도 비효율적입니다. 팀장은 목표와 기준을 분명히 하고, AI와 합의하면서 자율성을 주는 쪽으로 가야 합니다.</aside>
+      </div>
+    </section>
+
+    <section class="slide closing" data-title="Final Message">
+      <div class="slide__meta">
+        <div class="slide__num">20</div>
+        <div class="slide__tag">Closing</div>
+        <div class="slide__footer">Design the work environment</div>
+      </div>
+      <div class="slide__body">
+        <div class="eyebrow">마무리</div>
+        <h2>프롬프트를 잘 쓰는 것에서 끝나지 말자</h2>
+        <div class="quote">AI에게 일을 던지는 대신, AI가 반복적으로 좋은 결과를 내는 환경을 설계하자.<small>Harness engineering as an operating philosophy</small></div>
+        <ul class="bullets">
+          <li>하네스 엔지니어링은 기술이면서 동시에 운영 방식이다.</li>
+          <li>문서와 코드와 검증과 rollback이 하나의 시스템으로 이어져야 한다.</li>
+          <li>좋은 팀장은 AI에게도 좋은 일하는 환경을 만들어준다.</li>
+        </ul>
+        <aside class="notes">정리하면, 하네스 엔지니어링은 AI에게 일을 던지는 방식이 아니라, AI가 반복적으로 좋은 결과를 내도록 일하는 환경을 설계하는 작업입니다. 저는 이것이 단순한 테크닉을 넘어, 경영과 운영에 가까운 사고방식이라고 생각합니다.</aside>
+      </div>
+    </section>
+  </main>
+
+  <div class="hud">
+    <div class="hud__pill" id="slide-label">01 / 20 • Title</div>
+    <div class="hud__pill">← → 이동 · N 노트 · Home/End 점프 · P 인쇄</div>
+  </div>
+
+  <script>
+    const deck = document.getElementById("deck");
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const progressBar = document.getElementById("progress-bar");
+    const slideLabel = document.getElementById("slide-label");
+    let current = 0;
+
+    function updateDeck(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      deck.style.transform = `translateX(-${current * 100}vw)`;
+      slides.forEach((slide, idx) => slide.classList.toggle("active", idx === current));
+      const title = slides[current].dataset.title || `Slide ${current + 1}`;
+      slideLabel.textContent = `${String(current + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")} • ${title}`;
+      progressBar.style.width = `${((current + 1) / slides.length) * 100}%`;
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+        event.preventDefault();
+        updateDeck(current + 1);
+      } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        updateDeck(current - 1);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        updateDeck(0);
+      } else if (event.key === "End") {
+        event.preventDefault();
+        updateDeck(slides.length - 1);
+      } else if (event.key.toLowerCase() === "n") {
+        document.body.classList.toggle("show-notes");
+      } else if (event.key.toLowerCase() === "p") {
+        window.print();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("click", (event) => {
+      const width = window.innerWidth;
+      updateDeck(event.clientX > width / 2 ? current + 1 : current - 1);
+    });
+
+    updateDeck(0);
+  </script>
+</body>
+</html>
