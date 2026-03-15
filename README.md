@@ -1,4 +1,6 @@
-# Repository Overview
+# saju_harness_practice
+
+ask dori! harness engineering practice
 
 ## Purpose
 이 저장소는 harness engineering 방식으로 작은 앱을 설계, 구현, 검증하는 교육용 저장소다.
