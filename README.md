@@ -1,6 +1,7 @@
-# saju_harness_practice
 
-ask dori! harness engineering practice
+## Intro 
+Ask dori! Harness Engineering 따라하기 (feat. Peter Drucker)에서의 하네스 확인용 레포지토리 입니다. 
+
 
 ## Purpose
 이 저장소는 harness engineering 방식으로 작은 앱을 설계, 구현, 검증하는 교육용 저장소다.
