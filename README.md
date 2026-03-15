@@ -1,11 +1,15 @@
 
 ## Intro 
-Ask dori! Harness Engineering 따라하기 (feat. Peter Drucker)에서의 하네스 확인용 레포지토리 입니다. 
+Ask dori! Harness Engineering 따라하기 (feat. Peter Drucker)에서의 하네스 확인용 레포지토리 입니다.
+
+
+[![하네스 엔지니어링 따라하기](https://img.youtube.com/vi/kSlYNeEkdAM/maxresdefault.jpg)](https://youtu.be/kSlYNeEkdAM)
+
 
 
 ## Purpose
-이 저장소는 harness engineering 방식으로 작은 앱을 설계, 구현, 검증하는 교육용 저장소다.
-현재 첫 앱은 `apps/saju/` 아래에 있다.
+이 저장소는 harness engineering 방식으로 작은 앱을 설계, 구현, 검증하는 교육용 저장소이며, 
+현재 첫 앱은 `apps/saju/` 아래에 있습니다. 
 
 ## Structure
 - `harness/core/`: repository-level 규칙
